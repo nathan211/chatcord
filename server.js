@@ -1,13 +1,44 @@
 const path = require('path');
 const http = require('http');
 const express = require('express');
-const socketio = require('socket.io');
+const formatMessage = require('./utils/messages')
+const { userJoin, getCurrentUser } = require('./utils/users')
 
 const app = express();
 const server = http.createServer(app);
-const io = socketio(server);
+const io = require('socket.io')(server);
 
+const botName = 'ChatCord Bot'
+
+// Set static folder
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Run when client connects
+io.on('connection', socket => {
+    console.log('New WEB SOCKET connection...');
+    
+    socket.on('joinRoom', ({username, room}) => {
+        const user = userJoin(socket.id, username, room);
+
+        console.log('socketid join room', socket.id);
+
+        socket.join(user.room);
+
+        socket.emit('message', formatMessage(botName, 'Welcome to ChatCord!'));
+
+        socket.broadcast.to(user.room).emit('message', formatMessage(botName, `${username} has joined the chat.`));
+    });
+ 
+    socket.on('chatMessage', (msg) => {
+        const user = getCurrentUser(socket.id);
+
+        io.to(user.room).emit('message', formatMessage(user.username, msg));
+    })
+
+    socket.on('disconnect', () => {
+        io.emit('message', formatMessage(botName, `A user has left the chat.`));
+    })
+});
 
 const PORT = 3000 || process.env.PORT;
 
